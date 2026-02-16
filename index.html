@@ -161,10 +161,15 @@
   <!-- 粒子背景容器 -->
   <div id="particles-container" class="fixed inset-0 pointer-events-none z-0"></div>
   
-  <!-- 背景音乐 -->
-  <audio id="bg-music" loop preload="metadata">
-    <source src="https://cdn.pixabay.com/download/audio/2023/01/05/audio_dde7e6cf54.mp3" type="audio/mpeg">
+  <!-- 背景音乐 - 使用可靠的免费音乐源 -->
+  <audio id="bg-music" loop preload="auto" crossorigin="anonymous">
+    <source src="https://cdn.pixabay.com/download/audio/2022/03/24/audio_c8c8a73467.mp3?filename=relaxing-mountains-rivers-streams-running-water-18178.mp3" type="audio/mpeg">
   </audio>
+  
+  <!-- 音频加载状态提示 -->
+  <div id="audio-status" class="fixed top-24 right-4 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg z-50 opacity-0 transition-opacity duration-300 text-sm">
+    <span id="audio-status-text">🎵 准备播放...</span>
+  </div>
 
   <!-- 导航栏 -->
   <header class="sticky top-0 z-50 glass">
@@ -199,6 +204,67 @@
   <!-- 手势识别视频元素（隐藏） -->
   <video id="gesture-video" class="hidden" playsinline></video>
   <canvas id="gesture-canvas" class="hidden"></canvas>
+  
+  <!-- 手势引导面板 -->
+  <div id="gesture-guide" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center opacity-0 invisible transition-all duration-500">
+    <div class="bg-white rounded-2xl p-8 max-w-2xl w-full mx-4 transform scale-95 transition-transform duration-300">
+      <div class="text-center mb-6">
+        <div class="w-16 h-16 bg-gradient-to-br from-pink-400 to-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
+          <i class="fa fa-hand-paper-o text-white text-2xl"></i>
+        </div>
+        <h3 class="text-2xl font-bold text-gray-800 mb-2">手势控制指南</h3>
+        <p class="text-gray-600">使用手势控制照片浏览，无需触摸屏幕</p>
+      </div>
+      
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="text-center p-4 bg-pink-50 rounded-lg hover:bg-pink-100 transition-colors">
+          <div class="text-4xl mb-2">✋</div>
+          <div class="font-semibold text-gray-800">张开手掌</div>
+          <div class="text-sm text-gray-600">播放/暂停音乐</div>
+        </div>
+        <div class="text-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+          <div class="text-4xl mb-2">☝️</div>
+          <div class="font-semibold text-gray-800">食指向上</div>
+          <div class="text-sm text-gray-600">下一张照片</div>
+        </div>
+        <div class="text-center p-4 bg-green-50 rounded-lg hover:bg-green-100 transition-colors">
+          <div class="text-4xl mb-2">✌️</div>
+          <div class="font-semibold text-gray-800">剪刀手</div>
+          <div class="text-sm text-gray-600">上一张照片</div>
+        </div>
+        <div class="text-center p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
+          <div class="text-4xl mb-2">👌</div>
+          <div class="font-semibold text-gray-800">OK手势</div>
+          <div class="text-sm text-gray-600">关闭弹窗</div>
+        </div>
+      </div>
+      
+      <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+        <div class="flex items-start">
+          <i class="fa fa-lightbulb-o text-yellow-600 mt-1 mr-2"></i>
+          <div>
+            <div class="font-semibold text-yellow-800">使用提示</div>
+            <ul class="text-sm text-yellow-700 mt-1 space-y-1">
+              <li>• 确保摄像头光线充足</li>
+              <li>• 手势距离摄像头30-50厘米</li>
+              <li>• 保持手势稳定1-2秒</li>
+              <li>• 每次手势间隔1秒以上</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex justify-center space-x-4">
+        <button id="close-guide" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2 rounded-lg transition-colors">
+          稍后再说
+        </button>
+        <button id="start-gesture" class="bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-600 hover:to-purple-600 text-white px-6 py-2 rounded-lg transition-all transform hover:scale-105">
+          开始使用
+        </button>
+      </div>
+    </div>
+  </div>
+  
   <!-- 手势状态提示 -->
   <div id="gesture-hint" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full z-40 opacity-0 transition-opacity duration-300">
     <span id="gesture-text">等待手势...</span>
@@ -445,6 +511,11 @@
     const gestureCanvas = document.getElementById('gesture-canvas');
     const gestureHint = document.getElementById('gesture-hint');
     const gestureText = document.getElementById('gesture-text');
+    const gestureGuide = document.getElementById('gesture-guide');
+    const closeGuide = document.getElementById('close-guide');
+    const startGesture = document.getElementById('start-gesture');
+    const audioStatus = document.getElementById('audio-status');
+    const audioStatusText = document.getElementById('audio-status-text');
     const modalImage = document.getElementById('modal-image');
     const modalTitle = document.getElementById('modal-title');
     const modalDescription = document.getElementById('modal-description');
@@ -468,6 +539,9 @@
 
     // 初始化
     function init() {
+      // 初始化主题（在渲染之前）
+      initTheme();
+      
       // 从本地存储加载照片
       loadPhotos();
       
@@ -477,9 +551,8 @@
       // 创建花瓣背景
       createParticles();
       
-      // 初始化背景音乐
-      bgMusic = document.getElementById('bg-music');
-      bgMusic.volume = 0.5;
+      // 初始化音频播放器
+      initAudioPlayer();
       
       // 事件监听
       setupEventListeners();
@@ -712,41 +785,195 @@
       renderPhotos();
     }
 
-    // 切换深色/浅色模式
+    // 切换深色/浅色模式 - 增强版
     function toggleTheme() {
+      // 添加过渡动画
+      document.body.style.transition = 'background-color 300ms ease, color 300ms ease';
+      
       isDarkMode = !isDarkMode;
       
+      // 保存主题偏好到本地存储
+      localStorage.setItem('darkMode', isDarkMode);
+      
       if (isDarkMode) {
+        // 深色模式
         document.body.classList.add('dark');
         document.body.style.backgroundColor = '#1a1a2e';
         document.body.style.color = '#f8f9fa';
         themeToggle.innerHTML = '<i class="fa fa-sun-o"></i>';
+        themeToggle.classList.add('bg-yellow-400', 'text-yellow-900');
+        themeToggle.classList.remove('bg-white/80', 'text-dark');
+        
+        // 更新其他元素样式
+        updateDarkModeStyles(true);
       } else {
+        // 浅色模式
         document.body.classList.remove('dark');
         document.body.style.backgroundColor = '';
         document.body.style.color = '';
         themeToggle.innerHTML = '<i class="fa fa-moon-o"></i>';
+        themeToggle.classList.remove('bg-yellow-400', 'text-yellow-900');
+        themeToggle.classList.add('bg-white/80', 'text-dark');
+        
+        // 更新其他元素样式
+        updateDarkModeStyles(false);
+      }
+      
+      // 显示切换提示
+      showNotification(isDarkMode ? '🌙 已切换到深色模式' : '☀️ 已切换到浅色模式');
+      
+      // 移除过渡动画（避免影响其他操作）
+      setTimeout(() => {
+        document.body.style.transition = '';
+      }, 300);
+    }
+    
+    // 更新深色模式下的其他元素样式
+    function updateDarkModeStyles(isDark) {
+      const photoCards = document.querySelectorAll('.photo-card');
+      photoCards.forEach(card => {
+        if (isDark) {
+          card.classList.add('bg-gray-800', 'border-gray-700');
+          card.classList.remove('bg-white');
+        } else {
+          card.classList.remove('bg-gray-800', 'border-gray-700');
+          card.classList.add('bg-white');
+        }
+      });
+      
+      // 更新模态框样式
+      const modals = document.querySelectorAll('.modal-content');
+      modals.forEach(modal => {
+        if (isDark) {
+          modal.classList.add('bg-gray-800', 'text-white');
+          modal.classList.remove('bg-white');
+        } else {
+          modal.classList.remove('bg-gray-800', 'text-white');
+          modal.classList.add('bg-white');
+        }
+      });
+    }
+    
+    // 初始化主题
+    function initTheme() {
+      const savedDarkMode = localStorage.getItem('darkMode');
+      if (savedDarkMode === 'true') {
+        isDarkMode = true;
+        document.body.classList.add('dark');
+        document.body.style.backgroundColor = '#1a1a2e';
+        document.body.style.color = '#f8f9fa';
+        themeToggle.innerHTML = '<i class="fa fa-sun-o"></i>';
+        themeToggle.classList.add('bg-yellow-400', 'text-yellow-900');
+        themeToggle.classList.remove('bg-white/80', 'text-dark');
+        updateDarkModeStyles(true);
       }
     }
     
-    // 切换背景音乐播放
-    function toggleMusic() {
-      if (!bgMusic) return;
+    // 切换背景音乐播放 - 增强版
+    async function toggleMusic() {
+      if (!bgMusic) {
+        showNotification('音乐播放器未初始化');
+        return;
+      }
+      
+      // 显示加载状态
+      musicToggle.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+      audioStatus.classList.remove('opacity-0');
       
       if (isMusicPlaying) {
+        // 暂停播放
         bgMusic.pause();
         musicToggle.innerHTML = '<i class="fa fa-music"></i>';
         musicToggle.classList.remove('playing');
+        audioStatusText.textContent = '⏸️ 已暂停';
+        isMusicPlaying = false;
+        
+        setTimeout(() => {
+          audioStatus.classList.add('opacity-0');
+        }, 2000);
       } else {
-        bgMusic.play().then(() => {
-          musicToggle.innerHTML = '<i class="fa fa-pause"></i>';
-          musicToggle.classList.add('playing');
-        }).catch(error => {
+        // 尝试播放
+        try {
+          // 确保音量设置正确
+          bgMusic.volume = volumeSlider ? volumeSlider.value : 0.5;
+          
+          audioStatusText.textContent = '🎵 加载中...';
+          
+          const playPromise = bgMusic.play();
+          
+          if (playPromise !== undefined) {
+            await playPromise;
+            
+            // 播放成功
+            musicToggle.innerHTML = '<i class="fa fa-pause"></i>';
+            musicToggle.classList.add('playing');
+            audioStatusText.textContent = '▶️ 正在播放';
+            isMusicPlaying = true;
+            
+            setTimeout(() => {
+              audioStatus.classList.add('opacity-0');
+            }, 2000);
+          }
+        } catch (error) {
           console.error('播放音乐失败:', error);
-          showNotification('音乐播放需要用户交互，请先点击页面');
-        });
+          
+          // 根据错误类型提供不同的提示
+          if (error.name === 'NotAllowedError') {
+            audioStatusText.textContent = '❌ 需要用户交互';
+            showNotification('请点击页面任意位置后再播放音乐');
+          } else if (error.name === 'NotSupportedError') {
+            audioStatusText.textContent = '❌ 格式不支持';
+            showNotification('音频格式不支持，请检查浏览器');
+          } else {
+            audioStatusText.textContent = '❌ 播放失败';
+            showNotification('音乐播放失败: ' + error.message);
+          }
+          
+          musicToggle.innerHTML = '<i class="fa fa-music"></i>';
+          musicToggle.classList.remove('playing');
+          isMusicPlaying = false;
+          
+          setTimeout(() => {
+            audioStatus.classList.add('opacity-0');
+          }, 3000);
+        }
       }
-      isMusicPlaying = !isMusicPlaying;
+    }
+    
+    // 初始化音频播放器
+    function initAudioPlayer() {
+      bgMusic = document.getElementById('bg-music');
+      
+      if (!bgMusic) {
+        console.error('音频元素未找到');
+        return;
+      }
+      
+      // 设置初始音量
+      bgMusic.volume = 0.5;
+      
+      // 监听音频加载事件
+      bgMusic.addEventListener('loadeddata', () => {
+        console.log('音频加载完成');
+        audioStatusText.textContent = '✅ 音频已就绪';
+        audioStatus.classList.remove('opacity-0');
+        setTimeout(() => {
+          audioStatus.classList.add('opacity-0');
+        }, 2000);
+      });
+      
+      bgMusic.addEventListener('error', (e) => {
+        console.error('音频加载错误:', e);
+        audioStatusText.textContent = '❌ 音频加载失败';
+        audioStatus.classList.remove('opacity-0');
+        showNotification('音频加载失败，请检查网络连接');
+      });
+      
+      bgMusic.addEventListener('ended', () => {
+        // 循环播放
+        bgMusic.currentTime = 0;
+        bgMusic.play().catch(() => {});
+      });
     }
     
     // 切换手势控制
@@ -763,13 +990,35 @@
         gestureHint.classList.add('opacity-0');
         showNotification('手势控制已关闭');
       } else {
-        // 开启手势识别
-        try {
-          await initGestureRecognition();
-          isGestureEnabled = true;
-          gestureToggle.classList.add('playing');
-          gestureToggle.innerHTML = '<i class="fa fa-hand-peace-o"></i>';
-          showNotification('手势控制已开启，请对着摄像头');
+        // 显示手势引导面板
+        showGestureGuide();
+      }
+    }
+    
+    // 显示手势引导面板
+    function showGestureGuide() {
+      gestureGuide.classList.remove('opacity-0', 'invisible');
+      gestureGuide.querySelector('.bg-white').classList.remove('scale-95');
+      gestureGuide.querySelector('.bg-white').classList.add('scale-100');
+    }
+    
+    // 关闭手势引导面板
+    function hideGestureGuide() {
+      gestureGuide.classList.add('opacity-0', 'invisible');
+      gestureGuide.querySelector('.bg-white').classList.remove('scale-100');
+      gestureGuide.querySelector('.bg-white').classList.add('scale-95');
+    }
+    
+    // 开始手势识别
+    async function startGestureRecognition() {
+      hideGestureGuide();
+      
+      try {
+        await initGestureRecognition();
+        isGestureEnabled = true;
+        gestureToggle.classList.add('playing');
+        gestureToggle.innerHTML = '<i class="fa fa-hand-peace-o"></i>';
+        showNotification('手势控制已开启，请对着摄像头');
         } catch (error) {
           console.error('手势识别初始化失败:', error);
           showNotification('无法开启手势控制，请检查摄像头权限');
@@ -1194,24 +1443,51 @@
       // 手势控制
       gestureToggle.addEventListener('click', toggleGesture);
       
+      // 手势引导面板事件
+      closeGuide.addEventListener('click', hideGestureGuide);
+      startGesture.addEventListener('click', startGestureRecognition);
+      
+      // 点击引导面板背景关闭
+      gestureGuide.addEventListener('click', (e) => {
+        if (e.target === gestureGuide) {
+          hideGestureGuide();
+        }
+      });
+      
       // 特效控制
       effectToggle.addEventListener('click', toggleEffectMode);
     }
 
     // 切换特效模式
     function toggleEffectMode() {
-      isEffectMode = !isEffectMode;
-      
       if (isEffectMode) {
-        effectToggle.innerHTML = '<i class="fa fa-picture-o"></i>';
-        effectToggle.classList.add('playing');
-        transformPhotosToParticles();
-        showNotification('特效模式已开启！');
+        // 先显示加载状态
+        effectToggle.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+        
+        // 使用 requestAnimationFrame 确保 UI 更新后再执行
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            isEffectMode = false;
+            effectToggle.innerHTML = '<i class="fa fa-magic"></i>';
+            effectToggle.classList.remove('playing');
+            transformParticlesToPhotos();
+            showNotification('特效模式已关闭');
+          });
+        });
       } else {
-        effectToggle.innerHTML = '<i class="fa fa-magic"></i>';
-        effectToggle.classList.remove('playing');
-        transformParticlesToPhotos();
-        showNotification('特效模式已关闭');
+        // 先显示加载状态
+        effectToggle.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+        
+        // 预加载并立即执行
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            isEffectMode = true;
+            effectToggle.innerHTML = '<i class="fa fa-picture-o"></i>';
+            effectToggle.classList.add('playing');
+            transformPhotosToParticles();
+            showNotification('特效模式已开启！');
+          });
+        });
       }
     }
 
@@ -1220,23 +1496,74 @@
       const photoCards = document.querySelectorAll('.photo-card');
       particlePhotoMap.clear();
       
+      // 使用 DocumentFragment 批量操作，减少重绘
+      const fragment = document.createDocumentFragment();
+      
       photoCards.forEach((card, cardIndex) => {
         const rect = card.getBoundingClientRect();
         const img = card.querySelector('img');
         
         if (img && img.src) {
-          const particles = createParticlesFromPhoto(img.src, rect, cardIndex);
-          particlePhotoMap.set(cardIndex, { card, particles, rect });
-          
-          // 隐藏原照片
+          // 先隐藏原照片
           card.style.opacity = '0';
           card.style.transform = 'scale(0)';
-          card.style.transition = 'all 0.5s ease';
+          card.style.transition = 'all 0.3s ease';
+          
+          // 批量创建粒子
+          const particles = createParticlesFromPhotoBatch(img.src, rect, cardIndex, fragment);
+          particlePhotoMap.set(cardIndex, { card, particles, rect });
         }
       });
       
-      // 清除原有花瓣
+      // 清除原有花瓣并批量添加新粒子
       particlesContainer.innerHTML = '';
+      particlesContainer.appendChild(fragment);
+      
+      // 启动所有粒子动画
+      particlePhotoMap.forEach((data) => {
+        data.particles.forEach(p => {
+          animateParticle(p.element, p.startX, p.startY);
+        });
+      });
+    }
+    
+    // 批量创建粒子（优化版本）
+    function createParticlesFromPhotoBatch(imgSrc, rect, cardIndex, fragment) {
+      const particles = [];
+      const particleCount = effectConfig.particleDensity;
+      
+      // 使用对象池复用样式计算
+      const baseX = rect.left + rect.width / 2;
+      const baseY = rect.top + rect.height / 2;
+      const colors = ['#ffb7c5', '#ffc0cb', '#ff69b4', '#ff85a2', '#ffd1dc'];
+      
+      for (let i = 0; i < particleCount; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle-effect';
+        
+        // 粒子位置
+        const offsetX = (Math.random() - 0.5) * 100;
+        const offsetY = (Math.random() - 0.5) * 100;
+        const startX = baseX + offsetX;
+        const startY = baseY + offsetY;
+        
+        // 使用 CSS 自定义属性优化性能
+        particle.style.cssText = `
+          left: ${startX}px;
+          top: ${startY}px;
+          width: ${effectConfig.particleSize + Math.random() * 10}px;
+          height: ${effectConfig.particleSize + Math.random() * 10}px;
+          background-color: ${colors[Math.floor(Math.random() * colors.length)]};
+          opacity: ${0.7 + Math.random() * 0.3};
+          border-radius: ${Math.random() > 0.5 ? '70% 30% 70% 30% / 30% 70% 30% 70%' : '50%'};
+          will-change: transform, left, top;
+        `;
+        
+        fragment.appendChild(particle);
+        particles.push({ element: particle, startX, startY });
+      }
+      
+      return particles;
     }
 
     // 从照片创建粒子

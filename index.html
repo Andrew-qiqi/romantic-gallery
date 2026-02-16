@@ -8,6 +8,9 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Font Awesome -->
   <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <!-- MediaPipe Hands - 手势识别 -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.min.js"></script>
   <!-- 统一的 Tailwind 配置 -->
   <script>
     tailwind.config = {
@@ -63,10 +66,39 @@
       }
       .photo-card {
         transition: all 0.3s ease;
+        animation: photoFloat 6s ease-in-out infinite;
+      }
+      .photo-card:nth-child(odd) {
+        animation-duration: 7s;
+        animation-delay: -2s;
+      }
+      .photo-card:nth-child(even) {
+        animation-duration: 5s;
+        animation-delay: -1s;
+      }
+      .photo-card:nth-child(3n) {
+        animation-duration: 8s;
+        animation-delay: -3s;
+      }
+      @keyframes photoFloat {
+        0%, 100% {
+          transform: translateY(0) rotate(0deg);
+        }
+        25% {
+          transform: translateY(-8px) rotate(1deg);
+        }
+        50% {
+          transform: translateY(0) rotate(0deg);
+        }
+        75% {
+          transform: translateY(8px) rotate(-1deg);
+        }
       }
       .photo-card:hover {
+        animation-play-state: paused;
         transform: translateY(-5px) scale(1.02);
         box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        z-index: 10;
       }
       .modal {
         transition: opacity 0.3s ease, visibility 0.3s ease;
@@ -123,8 +155,11 @@
   <div id="particles-container" class="fixed inset-0 pointer-events-none z-0"></div>
   
   <!-- 背景音乐 -->
-  <audio id="bg-music" loop>
-    <source src="https://music.163.com/song/media/outer/url?id=1387586040.mp3" type="audio/mpeg">
+  <audio id="bg-music" preload="auto">
+    <source src="https://cdn.pixabay.com/download/audio/2022/10/25/audio_946bc3eb81.mp3" type="audio/mpeg">
+  </audio>
+  <audio id="bg-music-fallback" preload="auto" style="display:none;">
+    <source src="https://assets.mixkit.co/music/preview/mixkit-sweet-and-sentimental-443.mp3" type="audio/mpeg">
   </audio>
 
   <!-- 导航栏 -->
@@ -147,9 +182,20 @@
         <button id="theme-toggle" class="bg-white/80 hover:bg-white text-dark p-2 rounded-full transition-all duration-300 shadow-md hover:shadow-lg">
           <i class="fa fa-moon-o"></i>
         </button>
+        <button id="gesture-toggle" class="bg-white/80 hover:bg-white text-dark p-2 rounded-full transition-all duration-300 shadow-md hover:shadow-lg" title="手势控制">
+          <i class="fa fa-hand-spock-o"></i>
+        </button>
       </div>
     </div>
   </header>
+  
+  <!-- 手势识别视频元素（隐藏） -->
+  <video id="gesture-video" class="hidden" playsinline></video>
+  <canvas id="gesture-canvas" class="hidden"></canvas>
+  <!-- 手势状态提示 -->
+  <div id="gesture-hint" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full z-40 opacity-0 transition-opacity duration-300">
+    <span id="gesture-text">等待手势...</span>
+  </div>
 
   <!-- 主要内容 -->
   <main class="container mx-auto px-4 py-8 relative z-10">
@@ -365,6 +411,10 @@
     let photoToDelete = null;
     let isMusicPlaying = false;
     let bgMusic = null;
+    let isGestureEnabled = false;
+    let gestureCamera = null;
+    let lastGesture = null;
+    let gestureCooldown = false;
 
     // DOM 元素
     const photoGrid = document.getElementById('photo-grid');
@@ -374,6 +424,11 @@
     const cancelDelete = document.getElementById('cancel-delete');
     const musicToggle = document.getElementById('music-toggle');
     const volumeSlider = document.getElementById('volume-slider');
+    const gestureToggle = document.getElementById('gesture-toggle');
+    const gestureVideo = document.getElementById('gesture-video');
+    const gestureCanvas = document.getElementById('gesture-canvas');
+    const gestureHint = document.getElementById('gesture-hint');
+    const gestureText = document.getElementById('gesture-text');
     const modalImage = document.getElementById('modal-image');
     const modalTitle = document.getElementById('modal-title');
     const modalDescription = document.getElementById('modal-description');
@@ -663,17 +718,191 @@
       
       if (isMusicPlaying) {
         bgMusic.pause();
+        if (bgMusic.fallback) bgMusic.fallback.pause();
         musicToggle.innerHTML = '<i class="fa fa-music"></i>';
         musicToggle.classList.remove('playing');
       } else {
-        bgMusic.play().catch(error => {
-          console.log('播放音乐需要用户交互:', error);
-          showNotification('点击播放按钮播放音乐');
-        });
-        musicToggle.innerHTML = '<i class="fa fa-pause"></i>';
-        musicToggle.classList.add('playing');
+        const playPromise = bgMusic.play();
+        if (playPromise !== undefined) {
+          playPromise.then(() => {
+            musicToggle.innerHTML = '<i class="fa fa-pause"></i>';
+            musicToggle.classList.add('playing');
+          }).catch(error => {
+            console.log('主音乐源播放失败，尝试备用源:', error);
+            const fallback = document.getElementById('bg-music-fallback');
+            if (fallback) {
+              fallback.play().then(() => {
+                bgMusic.fallback = fallback;
+                musicToggle.innerHTML = '<i class="fa fa-pause"></i>';
+                musicToggle.classList.add('playing');
+              }).catch(e => {
+                console.log('备用音乐源也播放失败:', e);
+                showNotification('无法播放音乐，请检查网络连接');
+              });
+            }
+          });
+        }
       }
       isMusicPlaying = !isMusicPlaying;
+    }
+    
+    // 切换手势控制
+    async function toggleGesture() {
+      if (isGestureEnabled) {
+        // 关闭手势识别
+        if (gestureCamera) {
+          gestureCamera.stop();
+          gestureCamera = null;
+        }
+        isGestureEnabled = false;
+        gestureToggle.classList.remove('playing');
+        gestureToggle.innerHTML = '<i class="fa fa-hand-spock-o"></i>';
+        gestureHint.classList.add('opacity-0');
+        showNotification('手势控制已关闭');
+      } else {
+        // 开启手势识别
+        try {
+          await initGestureRecognition();
+          isGestureEnabled = true;
+          gestureToggle.classList.add('playing');
+          gestureToggle.innerHTML = '<i class="fa fa-hand-peace-o"></i>';
+          showNotification('手势控制已开启，请对着摄像头');
+        } catch (error) {
+          console.error('手势识别初始化失败:', error);
+          showNotification('无法开启手势控制，请检查摄像头权限');
+        }
+      }
+    }
+    
+    // 初始化手势识别
+    async function initGestureRecognition() {
+      const hands = new Hands({
+        locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`;
+        }
+      });
+      
+      hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.7,
+        minTrackingConfidence: 0.5
+      });
+      
+      hands.onResults(onGestureResults);
+      
+      gestureCamera = new Camera(gestureVideo, {
+        onFrame: async () => {
+          await hands.send({image: gestureVideo});
+        },
+        width: 640,
+        height: 480
+      });
+      
+      await gestureCamera.start();
+    }
+    
+    // 处理手势识别结果
+    function onGestureResults(results) {
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        const gesture = recognizeGesture(landmarks);
+        
+        if (gesture && gesture !== lastGesture && !gestureCooldown) {
+          lastGesture = gesture;
+          handleGesture(gesture);
+          
+          gestureCooldown = true;
+          setTimeout(() => {
+            gestureCooldown = false;
+          }, 1000);
+        }
+      }
+    }
+    
+    // 识别手势
+    function recognizeGesture(landmarks) {
+      const thumbTip = landmarks[4];
+      const indexTip = landmarks[8];
+      const middleTip = landmarks[12];
+      const ringTip = landmarks[16];
+      const pinkyTip = landmarks[20];
+      
+      const indexBase = landmarks[5];
+      const middleBase = landmarks[9];
+      const ringBase = landmarks[13];
+      const pinkyBase = landmarks[17];
+      
+      const fingers = [];
+      fingers.push(thumbTip.x < indexBase.x - 0.1);
+      fingers.push(indexTip.y < indexBase.y - 0.05);
+      fingers.push(middleTip.y < middleBase.y - 0.05);
+      fingers.push(ringTip.y < ringBase.y - 0.05);
+      fingers.push(pinkyTip.y < pinkyBase.y - 0.05);
+      
+      const fingersUp = fingers.filter(f => f).length;
+      
+      if (fingersUp === 5) return 'palm';
+      if (fingersUp === 0) return 'fist';
+      if (fingers[1] && !fingers[2] && !fingers[3] && !fingers[4]) return 'point_up';
+      if (fingers[1] && fingers[2] && !fingers[3] && !fingers[4]) return 'peace';
+      if (!fingers[1] && fingers[2] && !fingers[3] && !fingers[4]) return 'middle';
+      if (!fingers[1] && !fingers[2] && fingers[3] && !fingers[4]) return 'ring';
+      if (!fingers[1] && !fingers[2] && !fingers[3] && fingers[4]) return 'pinky';
+      
+      if (fingers[0] && fingers[1] && !fingers[2] && !fingers[3] && !fingers[4]) return 'ok';
+      
+      return null;
+    }
+    
+    // 处理手势动作
+    function handleGesture(gesture) {
+      let message = '';
+      
+      switch(gesture) {
+        case 'palm':
+          message = '✋ 张开手掌 - 暂停/播放音乐';
+          if (bgMusic) {
+            if (isMusicPlaying) {
+              bgMusic.pause();
+              if (bgMusic.fallback) bgMusic.fallback.pause();
+            } else {
+              bgMusic.play().catch(() => {});
+            }
+            isMusicPlaying = !isMusicPlaying;
+          }
+          break;
+        case 'fist':
+          message = '✊ 握拳 - 打开上传';
+          openUploadModal();
+          break;
+        case 'point_up':
+          message = '☝️ 食指向上 - 下一张';
+          if (!photoModal.classList.contains('invisible')) {
+            showNextImage();
+          }
+          break;
+        case 'peace':
+          message = '✌️ 剪刀手 - 上一张';
+          if (!photoModal.classList.contains('invisible')) {
+            showPrevImage();
+          }
+          break;
+        case 'ok':
+          message = '👌 OK手势 - 关闭弹窗';
+          closeModalFunc();
+          closeUploadModalFunc();
+          closeDeleteModal();
+          break;
+        default:
+          return;
+      }
+      
+      gestureText.textContent = message;
+      gestureHint.classList.remove('opacity-0');
+      setTimeout(() => {
+        gestureHint.classList.add('opacity-0');
+      }, 2000);
     }
 
     // 显示通知
@@ -936,6 +1165,9 @@
       window.addEventListener('resize', () => {
         createParticles();
       });
+      
+      // 手势控制
+      gestureToggle.addEventListener('click', toggleGesture);
     }
 
     // 初始化应用

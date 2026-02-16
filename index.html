@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>浪漫相册 | 记录美好时光</title>
+  <!-- Tailwind CSS v3 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome -->
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <!-- 统一的 Tailwind 配置 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#ff6b8b',
+            secondary: '#a2d2ff',
+            accent: '#ffafcc',
+            dark: '#333333',
+            light: '#f8f9fa'
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          animation: {
+            'float': 'float 6s ease-in-out infinite',
+            'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'fade-in': 'fadeIn 0.5s ease-in-out',
+            'slide-up': 'slideUp 0.5s ease-out',
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-10px)' },
+            },
+            fadeIn: {
+              '0%': { opacity: '0' },
+              '100%': { opacity: '1' },
+            },
+            slideUp: {
+              '0%': { transform: 'translateY(20px)', opacity: '0' },
+              '100%': { transform: 'translateY(0)', opacity: '1' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .text-shadow {
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+      }
+      .text-shadow-sm {
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+      }
+      .glass {
+        background: rgba(255, 255, 255, 0.25);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+      }
+      .photo-card {
+        transition: all 0.3s ease;
+      }
+      .photo-card:hover {
+        transform: translateY(-5px) scale(1.02);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      }
+      .modal {
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+      }
+      .modal-content {
+        transition: transform 0.3s ease;
+      }
+      .heart {
+        position: relative;
+        display: inline-block;
+        width: 40px;
+        height: 40px;
+        transform: rotate(-45deg);
+        animation: heartbeat 1.2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+      }
+      .heart:before,
+      .heart:after {
+        content: "";
+        position: absolute;
+        top: 0;
+        width: 20px;
+        height: 32px;
+        border-radius: 20px 20px 0 0;
+        background: #ff6b8b;
+      }
+      .heart:before {
+        left: 20px;
+        transform: rotate(-45deg);
+        transform-origin: 0 100%;
+      }
+      .heart:after {
+        left: 0;
+        transform: rotate(45deg);
+        transform-origin: 100% 100%;
+      }
+      @keyframes heartbeat {
+        0% { transform: scale(0.8) rotate(-45deg); }
+        5% { transform: scale(0.9) rotate(-45deg); }
+        10% { transform: scale(0.8) rotate(-45deg); }
+        15% { transform: scale(1) rotate(-45deg); }
+        50% { transform: scale(0.8) rotate(-45deg); }
+        100% { transform: scale(0.8) rotate(-45deg); }
+      }
+      .particle {
+        position: absolute;
+        border-radius: 50%;
+        pointer-events: none;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-pink-50 to-blue-50 min-h-screen">
+  <!-- 粒子背景容器 -->
+  <div id="particles-container" class="fixed inset-0 pointer-events-none z-0"></div>
+
+  <!-- 导航栏 -->
+  <header class="sticky top-0 z-50 glass">
+    <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="flex items-center space-x-2">
+        <div class="heart w-6 h-6"></div>
+        <h1 class="text-2xl font-bold text-primary text-shadow-sm">浪漫相册</h1>
+      </div>
+      <div class="flex items-center space-x-4">
+        <button id="upload-btn" class="bg-primary hover:bg-pink-500 text-white px-4 py-2 rounded-full transition-all duration-300 flex items-center space-x-2 shadow-md hover:shadow-lg">
+          <i class="fa fa-cloud-upload"></i>
+          <span>上传照片</span>
+        </button>
+        <input type="file" id="file-input" accept="image/*" multiple class="hidden">
+        <button id="theme-toggle" class="bg-white/80 hover:bg-white text-dark p-2 rounded-full transition-all duration-300 shadow-md hover:shadow-lg">
+          <i class="fa fa-moon-o"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主要内容 -->
+  <main class="container mx-auto px-4 py-8 relative z-10">
+    <!-- 欢迎区域 -->
+    <section class="text-center mb-12 animate-fade-in">
+      <h2 class="text-4xl md:text-5xl font-bold text-primary mb-4 text-shadow">记录美好时光</h2>
+      <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+        在这里珍藏您的浪漫瞬间，每一张照片都承载着独特的回忆。上传您的照片，让美好永远定格。
+      </p>
+    </section>
+
+    <!-- 照片网格 -->
+    <section class="mb-12">
+      <div id="photo-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        <!-- 照片将通过JavaScript动态添加 -->
+      </div>
+    </section>
+
+    <!-- 分类区域 -->
+    <section class="mb-12">
+      <h3 class="text-2xl font-bold text-primary mb-6 text-center">照片分类</h3>
+      <div class="flex flex-wrap justify-center gap-4 mb-8">
+        <button class="category-btn bg-primary text-white px-4 py-2 rounded-full transition-all duration-300 hover:shadow-lg active" data-category="all">
+          全部照片
+        </button>
+        <button class="category-btn bg-white text-primary border border-primary px-4 py-2 rounded-full transition-all duration-300 hover:bg-primary hover:text-white hover:shadow-lg" data-category="landscape">
+          风景
+        </button>
+        <button class="category-btn bg-white text-primary border border-primary px-4 py-2 rounded-full transition-all duration-300 hover:bg-primary hover:text-white hover:shadow-lg" data-category="people">
+          人物
+        </button>
+        <button class="category-btn bg-white text-primary border border-primary px-4 py-2 rounded-full transition-all duration-300 hover:bg-primary hover:text-white hover:shadow-lg" data-category="food">
+          美食
+        </button>
+        <button class="category-btn bg-white text-primary border border-primary px-4 py-2 rounded-full transition-all duration-300 hover:bg-primary hover:text-white hover:shadow-lg" data-category="city">
+          城市
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- 页脚 -->
+  <footer class="bg-primary/10 py-6 relative z-10">
+    <div class="container mx-auto px-4 text-center">
+      <p class="text-gray-600">© 2026 浪漫相册 | 记录每一个美好瞬间</p>
+      <div class="flex justify-center space-x-4 mt-4">
+        <a href="#" class="text-primary hover:text-pink-700 transition-colors">
+          <i class="fa fa-heart"></i>
+        </a>
+        <a href="#" class="text-primary hover:text-pink-700 transition-colors">
+          <i class="fa fa-camera"></i>
+        </a>
+        <a href="#" class="text-primary hover:text-pink-700 transition-colors">
+          <i class="fa fa-bookmark"></i>
+        </a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- 照片查看模态框 -->
+  <div id="photo-modal" class="modal fixed inset-0 bg-black/80 z-50 flex items-center justify-center opacity-0 invisible">
+    <div class="modal-content bg-white rounded-lg overflow-hidden max-w-4xl w-full max-h-[90vh] transform scale-95">
+      <div class="relative">
+        <button id="close-modal" class="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white p-2 rounded-full transition-all duration-300 z-10">
+          <i class="fa fa-times"></i>
+        </button>
+        <div class="flex items-center justify-center h-[70vh]">
+          <img id="modal-image" src="" alt="放大查看" class="max-h-full max-w-full object-contain">
+        </div>
+        <div class="p-4 bg-white">
+          <h3 id="modal-title" class="text-xl font-bold text-primary mb-2"></h3>
+          <p id="modal-description" class="text-gray-600"></p>
+        </div>
+        <div class="absolute top-1/2 left-4 transform -translate-y-1/2">
+          <button id="prev-image" class="bg-white/20 hover:bg-white/40 text-white p-3 rounded-full transition-all duration-300">
+            <i class="fa fa-chevron-left"></i>
+          </button>
+        </div>
+        <div class="absolute top-1/2 right-4 transform -translate-y-1/2">
+          <button id="next-image" class="bg-white/20 hover:bg-white/40 text-white p-3 rounded-full transition-all duration-300">
+            <i class="fa fa-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 上传照片模态框 -->
+  <div id="upload-modal" class="modal fixed inset-0 bg-black/80 z-50 flex items-center justify-center opacity-0 invisible">
+    <div class="modal-content bg-white rounded-lg overflow-hidden max-w-md w-full transform scale-95">
+      <div class="p-6">
+        <div class="flex justify-between items-center mb-6">
+          <h3 class="text-2xl font-bold text-primary">上传照片</h3>
+          <button id="close-upload-modal" class="text-gray-500 hover:text-gray-700">
+            <i class="fa fa-times"></i>
+          </button>
+        </div>
+        <div class="mb-6">
+          <label for="upload-file" class="block text-gray-700 mb-2">选择照片</label>
+          <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-primary transition-colors" id="drop-area">
+            <i class="fa fa-cloud-upload text-4xl text-primary mb-4"></i>
+            <p class="text-gray-600 mb-2">点击或拖拽照片到此处</p>
+            <p class="text-sm text-gray-500">支持 JPG, PNG, GIF 格式</p>
+            <input type="file" id="upload-file" accept="image/*" multiple class="hidden">
+          </div>
+        </div>
+        <div class="mb-6">
+          <label for="photo-title" class="block text-gray-700 mb-2">照片标题</label>
+          <input type="text" id="photo-title" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+        </div>
+        <div class="mb-6">
+          <label for="photo-description" class="block text-gray-700 mb-2">照片描述</label>
+          <textarea id="photo-description" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></textarea>
+        </div>
+        <div class="mb-6">
+          <label for="photo-category" class="block text-gray-700 mb-2">照片分类</label>
+          <select id="photo-category" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+            <option value="landscape">风景</option>
+            <option value="people">人物</option>
+            <option value="food">美食</option>
+            <option value="city">城市</option>
+          </select>
+        </div>
+        <div class="flex justify-end">
+          <button id="confirm-upload" class="bg-primary hover:bg-pink-500 text-white px-6 py-2 rounded-lg transition-all duration-300">
+            确认上传
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript -->
+  <script>
+    // 示例照片数据
+    const samplePhotos = [
+      {
+        id: 1,
+        url: 'https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/d6981a8c85914ac0b254ef7793d19f90~tplv-a9rns2rl98-image.image?lk3s=8e244e95&rcl=202602161305590B548B51FA8114422AA6&rrcfp=f06b921b&x-expires=1773810382&x-signature=uXXTWlhUV6ISTec0OtifwRc8%2F54%3D',
+        title: '浪漫日落',
+        description: '夕阳西下，海面上波光粼粼，记录下这浪漫的时刻。',
+        category: 'landscape',
+        date: '2026-02-14'
+      },
+      {
+        id: 2,
+        url: 'https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/2a0e0b6d87e045dc91ff96fb487faa96~tplv-a9rns2rl98-image.image?lk3s=8e244e95&rcl=202602161305590B548B51FA8114422AA6&rrcfp=f06b921b&x-expires=1773810382&x-signature=ZnKSb2T6UalloI87pjc6GmObGzw%3D',
+        title: '花田漫步',
+        description: '在花海中牵手漫步，感受春天的气息和爱情的美好。',
+        category: 'people',
+        date: '2026-03-01'
+      },
+      {
+        id: 3,
+        url: 'https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/b64ad7dd91b144b8ab22d8327454ee6a~tplv-a9rns2rl98-image.image?lk3s=8e244e95&rcl=202602161305590B548B51FA8114422AA6&rrcfp=f06b921b&x-expires=1773810383&x-signature=fx%2BJ8XrZ%2FuSPMFOQUnBRT99Hx7k%3D',
+        title: '粉色玫瑰',
+        description: '娇艳的粉色玫瑰，象征着浪漫的爱情和美好的祝福。',
+        category: 'landscape',
+        date: '2026-02-14'
+      },
+      {
+        id: 4,
+        url: 'https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/680e816ea5fd4f1e81c78f774e8eb512~tplv-a9rns2rl98-image.image?lk3s=8e244e95&rcl=202602161305590B548B51FA8114422AA6&rrcfp=f06b921b&x-expires=1773810382&x-signature=VF6AyIxcWK713B2kYCTs4s684Ck%3D',
+        title: '烛光晚餐',
+        description: '浪漫的烛光晚餐，玫瑰和红酒，营造出温馨的氛围。',
+        category: 'food',
+        date: '2026-02-14'
+      },
+      {
+        id: 5,
+        url: 'https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/c67afd715d9349a6b26d111395262486~tplv-a9rns2rl98-image.image?lk3s=8e244e95&rcl=202602161305590B548B51FA8114422AA6&rrcfp=f06b921b&x-expires=1773810383&x-signature=%2FOsbGyTzjWCgc8k8IqpbqmQNtWw%3D',
+        title: '城市夜景',
+        description: '城市的夜晚，灯火通明，映照在水面上，美不胜收。',
+        category: 'city',
+        date: '2026-02-20'
+      },
+      {
+        id: 6,
+        url: 'https://p9-flow-imagex-sign.byteimg.com/tos-cn-i-a9rns2rl98/rc/pc/super_tool/6310603e5eb74b32a17500f93f389fc8~tplv-a9rns2rl98-image.image?lk3s=8e244e95&rcl=202602161305590B548B51FA8114422AA6&rrcfp=f06b921b&x-expires=1773810382&x-signature=8d6ay5h0EbmW%2F2E0UyjwdC%2BlYYk%3D',
+        title: '海滩相拥',
+        description: '在海边看日落，相拥在一起，感受彼此的温暖。',
+        category: 'people',
+        date: '2026-01-15'
+      }
+    ];
+
+    // 全局变量
+    let photos = [];
+    let currentPhotoIndex = 0;
+    let currentCategory = 'all';
+    let isDarkMode = false;
+
+    // DOM 元素
+    const photoGrid = document.getElementById('photo-grid');
+    const photoModal = document.getElementById('photo-modal');
+    const modalImage = document.getElementById('modal-image');
+    const modalTitle = document.getElementById('modal-title');
+    const modalDescription = document.getElementById('modal-description');
+    const closeModal = document.getElementById('close-modal');
+    const prevImage = document.getElementById('prev-image');
+    const nextImage = document.getElementById('next-image');
+    const uploadBtn = document.getElementById('upload-btn');
+    const uploadModal = document.getElementById('upload-modal');
+    const closeUploadModal = document.getElementById('close-upload-modal');
+    const confirmUpload = document.getElementById('confirm-upload');
+    const fileInput = document.getElementById('file-input');
+    const uploadFile = document.getElementById('upload-file');
+    const dropArea = document.getElementById('drop-area');
+    const photoTitle = document.getElementById('photo-title');
+    const photoDescription = document.getElementById('photo-description');
+    const photoCategory = document.getElementById('photo-category');
+    const themeToggle = document.getElementById('theme-toggle');
+    const categoryBtns = document.querySelectorAll('.category-btn');
+    const particlesContainer = document.getElementById('particles-container');
+
+    // 初始化
+    function init() {
+      // 从本地存储加载照片
+      loadPhotos();
+      
+      // 渲染照片
+      renderPhotos();
+      
+      // 创建粒子背景
+      createParticles();
+      
+      // 事件监听
+      setupEventListeners();
+    }
+
+    // 从本地存储加载照片
+    function loadPhotos() {
+      const savedPhotos = localStorage.getItem('romanticGalleryPhotos');
+      if (savedPhotos) {
+        photos = JSON.parse(savedPhotos);
+      } else {
+        // 如果没有保存的照片，使用示例照片
+        photos = samplePhotos;
+        savePhotos();
+      }
+    }
+
+    // 保存照片到本地存储
+    function savePhotos() {
+      localStorage.setItem('romanticGalleryPhotos', JSON.stringify(photos));
+    }
+
+    // 渲染照片网格
+    function renderPhotos() {
+      photoGrid.innerHTML = '';
+      
+      const filteredPhotos = currentCategory === 'all' 
+        ? photos 
+        : photos.filter(photo => photo.category === currentCategory);
+      
+      if (filteredPhotos.length === 0) {
+        photoGrid.innerHTML = `
+          <div class="col-span-full text-center py-12">
+            <i class="fa fa-image text-4xl text-gray-300 mb-4"></i>
+            <p class="text-gray-500">暂无照片</p>
+          </div>
+        `;
+        return;
+      }
+      
+      filteredPhotos.forEach((photo, index) => {
+        const photoCard = document.createElement('div');
+        photoCard.className = 'photo-card rounded-lg overflow-hidden shadow-md animate-fade-in';
+        photoCard.style.animationDelay = `${index * 0.1}s`;
+        
+        photoCard.innerHTML = `
+          <div class="relative aspect-[4/3] overflow-hidden bg-gray-100">
+            <img src="${photo.url}" alt="${photo.title}" class="w-full h-full object-cover transition-transform duration-500 hover:scale-110">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 flex items-end">
+              <div class="p-4 text-white">
+                <h3 class="font-bold text-lg">${photo.title}</h3>
+                <p class="text-sm opacity-90">${photo.date}</p>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        photoCard.addEventListener('click', () => openModal(photo, index));
+        photoGrid.appendChild(photoCard);
+      });
+    }
+
+    // 打开照片查看模态框
+    function openModal(photo, index) {
+      currentPhotoIndex = index;
+      modalImage.src = photo.url;
+      modalTitle.textContent = photo.title;
+      modalDescription.textContent = photo.description;
+      
+      photoModal.classList.remove('opacity-0', 'invisible');
+      photoModal.querySelector('.modal-content').classList.remove('scale-95');
+      photoModal.querySelector('.modal-content').classList.add('scale-100');
+      
+      document.body.style.overflow = 'hidden';
+    }
+
+    // 关闭照片查看模态框
+    function closeModalFunc() {
+      photoModal.classList.add('opacity-0', 'invisible');
+      photoModal.querySelector('.modal-content').classList.remove('scale-100');
+      photoModal.querySelector('.modal-content').classList.add('scale-95');
+      
+      document.body.style.overflow = '';
+    }
+
+    // 显示上一张照片
+    function showPrevImage() {
+      const filteredPhotos = currentCategory === 'all' 
+        ? photos 
+        : photos.filter(photo => photo.category === currentCategory);
+      
+      currentPhotoIndex = (currentPhotoIndex - 1 + filteredPhotos.length) % filteredPhotos.length;
+      const photo = filteredPhotos[currentPhotoIndex];
+      
+      modalImage.src = photo.url;
+      modalTitle.textContent = photo.title;
+      modalDescription.textContent = photo.description;
+    }
+
+    // 显示下一张照片
+    function showNextImage() {
+      const filteredPhotos = currentCategory === 'all' 
+        ? photos 
+        : photos.filter(photo => photo.category === currentCategory);
+      
+      currentPhotoIndex = (currentPhotoIndex + 1) % filteredPhotos.length;
+      const photo = filteredPhotos[currentPhotoIndex];
+      
+      modalImage.src = photo.url;
+      modalTitle.textContent = photo.title;
+      modalDescription.textContent = photo.description;
+    }
+
+    // 打开上传照片模态框
+    function openUploadModal() {
+      uploadModal.classList.remove('opacity-0', 'invisible');
+      uploadModal.querySelector('.modal-content').classList.remove('scale-95');
+      uploadModal.querySelector('.modal-content').classList.add('scale-100');
+      
+      document.body.style.overflow = 'hidden';
+    }
+
+    // 关闭上传照片模态框
+    function closeUploadModalFunc() {
+      uploadModal.classList.add('opacity-0', 'invisible');
+      uploadModal.querySelector('.modal-content').classList.remove('scale-100');
+      uploadModal.querySelector('.modal-content').classList.add('scale-95');
+      
+      document.body.style.overflow = '';
+      
+      // 重置表单
+      uploadFile.value = '';
+      photoTitle.value = '';
+      photoDescription.value = '';
+      photoCategory.value = 'landscape';
+    }
+
+    // 处理照片上传
+    function handleUpload() {
+      const files = uploadFile.files;
+      if (files.length === 0) {
+        alert('请选择照片');
+        return;
+      }
+      
+      const file = files[0];
+      const reader = new FileReader();
+      
+      reader.onload = function(e) {
+        const newPhoto = {
+          id: Date.now(),
+          url: e.target.result,
+          title: photoTitle.value || '未命名照片',
+          description: photoDescription.value || '暂无描述',
+          category: photoCategory.value,
+          date: new Date().toISOString().split('T')[0]
+        };
+        
+        photos.unshift(newPhoto);
+        savePhotos();
+        renderPhotos();
+        closeUploadModalFunc();
+        
+        // 显示上传成功提示
+        showNotification('照片上传成功！');
+      };
+      
+      reader.readAsDataURL(file);
+    }
+
+    // 切换分类
+    function switchCategory(category) {
+      currentCategory = category;
+      
+      // 更新按钮样式
+      categoryBtns.forEach(btn => {
+        if (btn.dataset.category === category) {
+          btn.classList.remove('bg-white', 'text-primary', 'border', 'border-primary');
+          btn.classList.add('bg-primary', 'text-white', 'active');
+        } else {
+          btn.classList.remove('bg-primary', 'text-white', 'active');
+          btn.classList.add('bg-white', 'text-primary', 'border', 'border-primary');
+        }
+      });
+      
+      renderPhotos();
+    }
+
+    // 切换深色/浅色模式
+    function toggleTheme() {
+      isDarkMode = !isDarkMode;
+      
+      if (isDarkMode) {
+        document.body.classList.add('dark');
+        document.body.style.backgroundColor = '#1a1a2e';
+        document.body.style.color = '#f8f9fa';
+        themeToggle.innerHTML = '<i class="fa fa-sun-o"></i>';
+      } else {
+        document.body.classList.remove('dark');
+        document.body.style.backgroundColor = '';
+        document.body.style.color = '';
+        themeToggle.innerHTML = '<i class="fa fa-moon-o"></i>';
+      }
+    }
+
+    // 显示通知
+    function showNotification(message) {
+      const notification = document.createElement('div');
+      notification.className = 'fixed top-20 right-4 bg-primary text-white px-6 py-3 rounded-lg shadow-lg z-50 transform translate-x-full transition-transform duration-300';
+      notification.textContent = message;
+      
+      document.body.appendChild(notification);
+      
+      // 显示通知
+      setTimeout(() => {
+        notification.classList.remove('translate-x-full');
+      }, 100);
+      
+      // 3秒后隐藏通知
+      setTimeout(() => {
+        notification.classList.add('translate-x-full');
+        
+        // 移除元素
+        setTimeout(() => {
+          document.body.removeChild(notification);
+        }, 300);
+      }, 3000);
+    }
+
+    // 创建粒子背景
+    function createParticles() {
+      particlesContainer.innerHTML = '';
+      
+      const particleCount = 50;
+      
+      for (let i = 0; i < particleCount; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        
+        // 随机大小
+        const size = Math.random() * 5 + 1;
+        particle.style.width = `${size}px`;
+        particle.style.height = `${size}px`;
+        
+        // 随机位置
+        particle.style.left = `${Math.random() * 100}%`;
+        particle.style.top = `${Math.random() * 100}%`;
+        
+        // 随机颜色
+        const colors = ['#ff6b8b', '#a2d2ff', '#ffafcc', '#bde0fe'];
+        particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        
+        // 随机动画
+        const duration = Math.random() * 20 + 10;
+        const delay = Math.random() * 5;
+        
+        particle.style.animation = `float ${duration}s ease-in-out ${delay}s infinite`;
+        
+        particlesContainer.appendChild(particle);
+      }
+    }
+
+    // 设置事件监听
+    function setupEventListeners() {
+      // 照片查看模态框
+      closeModal.addEventListener('click', closeModalFunc);
+      prevImage.addEventListener('click', showPrevImage);
+      nextImage.addEventListener('click', showNextImage);
+      
+      // 键盘导航
+      document.addEventListener('keydown', (e) => {
+        if (photoModal.classList.contains('opacity-0')) return;
+        
+        if (e.key === 'Escape') {
+          closeModalFunc();
+        } else if (e.key === 'ArrowLeft') {
+          showPrevImage();
+        } else if (e.key === 'ArrowRight') {
+          showNextImage();
+        }
+      });
+      
+      // 点击模态框背景关闭
+      photoModal.addEventListener('click', (e) => {
+        if (e.target === photoModal) {
+          closeModalFunc();
+        }
+      });
+      
+      // 上传照片模态框
+      uploadBtn.addEventListener('click', openUploadModal);
+      closeUploadModal.addEventListener('click', closeUploadModalFunc);
+      confirmUpload.addEventListener('click', handleUpload);
+      
+      // 点击上传模态框背景关闭
+      uploadModal.addEventListener('click', (e) => {
+        if (e.target === uploadModal) {
+          closeUploadModalFunc();
+        }
+      });
+      
+      // 文件选择
+      fileInput.addEventListener('change', () => {
+        if (fileInput.files.length > 0) {
+          uploadFile.files = fileInput.files;
+          handleUpload();
+        }
+      });
+      
+      // 拖拽上传
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, preventDefaults, false);
+      });
+      
+      function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.addEventListener(eventName, highlight, false);
+      });
+      
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, unhighlight, false);
+      });
+      
+      function highlight() {
+        dropArea.classList.add('border-primary');
+      }
+      
+      function unhighlight() {
+        dropArea.classList.remove('border-primary');
+      }
+      
+      dropArea.addEventListener('drop', handleDrop, false);
+      
+      function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        
+        if (files.length > 0) {
+          uploadFile.files = files;
+        }
+      }
+      
+      // 点击上传区域选择文件
+      dropArea.addEventListener('click', () => {
+        uploadFile.click();
+      });
+      
+      // 文件选择后自动填充标题
+      uploadFile.addEventListener('change', () => {
+        if (uploadFile.files.length > 0) {
+          const fileName = uploadFile.files[0].name.split('.')[0];
+          if (!photoTitle.value) {
+            photoTitle.value = fileName;
+          }
+        }
+      });
+      
+      // 分类切换
+      categoryBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          switchCategory(btn.dataset.category);
+        });
+      });
+      
+      // 主题切换
+      themeToggle.addEventListener('click', toggleTheme);
+      
+      // 窗口大小改变时重新创建粒子
+      window.addEventListener('resize', () => {
+        createParticles();
+      });
+    }
+
+    // 初始化应用
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

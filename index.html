@@ -147,6 +147,13 @@
         border-radius: 50%;
         pointer-events: none;
       }
+      .particle-effect {
+        position: fixed;
+        pointer-events: none;
+        z-index: 15;
+        box-shadow: 0 0 10px rgba(255, 107, 139, 0.5);
+        transition: opacity 0.3s ease, transform 0.3s ease;
+      }
     }
   </style>
 </head>
@@ -155,11 +162,8 @@
   <div id="particles-container" class="fixed inset-0 pointer-events-none z-0"></div>
   
   <!-- 背景音乐 -->
-  <audio id="bg-music" preload="auto">
-    <source src="https://cdn.pixabay.com/download/audio/2022/10/25/audio_946bc3eb81.mp3" type="audio/mpeg">
-  </audio>
-  <audio id="bg-music-fallback" preload="auto" style="display:none;">
-    <source src="https://assets.mixkit.co/music/preview/mixkit-sweet-and-sentimental-443.mp3" type="audio/mpeg">
+  <audio id="bg-music" loop preload="metadata">
+    <source src="https://cdn.pixabay.com/download/audio/2023/01/05/audio_dde7e6cf54.mp3" type="audio/mpeg">
   </audio>
 
   <!-- 导航栏 -->
@@ -184,6 +188,9 @@
         </button>
         <button id="gesture-toggle" class="bg-white/80 hover:bg-white text-dark p-2 rounded-full transition-all duration-300 shadow-md hover:shadow-lg" title="手势控制">
           <i class="fa fa-hand-spock-o"></i>
+        </button>
+        <button id="effect-toggle" class="bg-white/80 hover:bg-white text-dark p-2 rounded-full transition-all duration-300 shadow-md hover:shadow-lg" title="特效切换">
+          <i class="fa fa-magic"></i>
         </button>
       </div>
     </div>
@@ -415,6 +422,15 @@
     let gestureCamera = null;
     let lastGesture = null;
     let gestureCooldown = false;
+    let isEffectMode = false;
+    let particlePhotoMap = new Map();
+    
+    // 特效配置
+    let effectConfig = {
+      particleDensity: 80,
+      animationSpeed: 1,
+      particleSize: 12
+    };
 
     // DOM 元素
     const photoGrid = document.getElementById('photo-grid');
@@ -448,6 +464,7 @@
     const themeToggle = document.getElementById('theme-toggle');
     const categoryBtns = document.querySelectorAll('.category-btn');
     const particlesContainer = document.getElementById('particles-container');
+    const effectToggle = document.getElementById('effect-toggle');
 
     // 初始化
     function init() {
@@ -718,30 +735,16 @@
       
       if (isMusicPlaying) {
         bgMusic.pause();
-        if (bgMusic.fallback) bgMusic.fallback.pause();
         musicToggle.innerHTML = '<i class="fa fa-music"></i>';
         musicToggle.classList.remove('playing');
       } else {
-        const playPromise = bgMusic.play();
-        if (playPromise !== undefined) {
-          playPromise.then(() => {
-            musicToggle.innerHTML = '<i class="fa fa-pause"></i>';
-            musicToggle.classList.add('playing');
-          }).catch(error => {
-            console.log('主音乐源播放失败，尝试备用源:', error);
-            const fallback = document.getElementById('bg-music-fallback');
-            if (fallback) {
-              fallback.play().then(() => {
-                bgMusic.fallback = fallback;
-                musicToggle.innerHTML = '<i class="fa fa-pause"></i>';
-                musicToggle.classList.add('playing');
-              }).catch(e => {
-                console.log('备用音乐源也播放失败:', e);
-                showNotification('无法播放音乐，请检查网络连接');
-              });
-            }
-          });
-        }
+        bgMusic.play().then(() => {
+          musicToggle.innerHTML = '<i class="fa fa-pause"></i>';
+          musicToggle.classList.add('playing');
+        }).catch(error => {
+          console.error('播放音乐失败:', error);
+          showNotification('音乐播放需要用户交互，请先点击页面');
+        });
       }
       isMusicPlaying = !isMusicPlaying;
     }
@@ -865,25 +868,24 @@
           if (bgMusic) {
             if (isMusicPlaying) {
               bgMusic.pause();
-              if (bgMusic.fallback) bgMusic.fallback.pause();
+              musicToggle.innerHTML = '<i class="fa fa-music"></i>';
+              musicToggle.classList.remove('playing');
             } else {
               bgMusic.play().catch(() => {});
+              musicToggle.innerHTML = '<i class="fa fa-pause"></i>';
+              musicToggle.classList.add('playing');
             }
             isMusicPlaying = !isMusicPlaying;
           }
           break;
-        case 'fist':
-          message = '✊ 握拳 - 打开上传';
-          openUploadModal();
-          break;
         case 'point_up':
-          message = '☝️ 食指向上 - 下一张';
+          message = '☝️ 食指向上 - 下一张照片';
           if (!photoModal.classList.contains('invisible')) {
             showNextImage();
           }
           break;
         case 'peace':
-          message = '✌️ 剪刀手 - 上一张';
+          message = '✌️ 剪刀手 - 上一张照片';
           if (!photoModal.classList.contains('invisible')) {
             showPrevImage();
           }
@@ -893,6 +895,29 @@
           closeModalFunc();
           closeUploadModalFunc();
           closeDeleteModal();
+          break;
+        case 'middle':
+          message = '🖕 中指 - 切换深色/浅色模式';
+          toggleTheme();
+          break;
+        case 'ring':
+          message = '🖖 无名指 - 随机播放照片';
+          if (photos.length > 0) {
+            const randomIndex = Math.floor(Math.random() * photos.length);
+            openModal(photos[randomIndex], randomIndex);
+          }
+          break;
+        case 'pinky':
+          message = '🤙 小拇指 - 隐藏/显示导航栏';
+          const header = document.querySelector('header');
+          if (header) {
+            header.style.transition = 'transform 0.3s ease';
+            if (header.style.transform === 'translateY(-100%)') {
+              header.style.transform = 'translateY(0)';
+            } else {
+              header.style.transform = 'translateY(-100%)';
+            }
+          }
           break;
         default:
           return;
@@ -1168,6 +1193,153 @@
       
       // 手势控制
       gestureToggle.addEventListener('click', toggleGesture);
+      
+      // 特效控制
+      effectToggle.addEventListener('click', toggleEffectMode);
+    }
+
+    // 切换特效模式
+    function toggleEffectMode() {
+      isEffectMode = !isEffectMode;
+      
+      if (isEffectMode) {
+        effectToggle.innerHTML = '<i class="fa fa-picture-o"></i>';
+        effectToggle.classList.add('playing');
+        transformPhotosToParticles();
+        showNotification('特效模式已开启！');
+      } else {
+        effectToggle.innerHTML = '<i class="fa fa-magic"></i>';
+        effectToggle.classList.remove('playing');
+        transformParticlesToPhotos();
+        showNotification('特效模式已关闭');
+      }
+    }
+
+    // 照片转换为粒子
+    function transformPhotosToParticles() {
+      const photoCards = document.querySelectorAll('.photo-card');
+      particlePhotoMap.clear();
+      
+      photoCards.forEach((card, cardIndex) => {
+        const rect = card.getBoundingClientRect();
+        const img = card.querySelector('img');
+        
+        if (img && img.src) {
+          const particles = createParticlesFromPhoto(img.src, rect, cardIndex);
+          particlePhotoMap.set(cardIndex, { card, particles, rect });
+          
+          // 隐藏原照片
+          card.style.opacity = '0';
+          card.style.transform = 'scale(0)';
+          card.style.transition = 'all 0.5s ease';
+        }
+      });
+      
+      // 清除原有花瓣
+      particlesContainer.innerHTML = '';
+    }
+
+    // 从照片创建粒子
+    function createParticlesFromPhoto(imgSrc, rect, cardIndex) {
+      const particles = [];
+      const particleCount = effectConfig.particleDensity;
+      
+      for (let i = 0; i < particleCount; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle-effect';
+        
+        // 粒子位置
+        const offsetX = (Math.random() - 0.5) * 100;
+        const offsetY = (Math.random() - 0.5) * 100;
+        const startX = rect.left + rect.width / 2 + offsetX;
+        const startY = rect.top + rect.height / 2 + offsetY;
+        
+        particle.style.left = `${startX}px`;
+        particle.style.top = `${startY}px`;
+        particle.style.width = `${effectConfig.particleSize + Math.random() * 10}px`;
+        particle.style.height = `${effectConfig.particleSize + Math.random() * 10}px`;
+        
+        // 粉色系颜色
+        const colors = ['#ffb7c5', '#ffc0cb', '#ff69b4', '#ff85a2', '#ffd1dc'];
+        particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        particle.style.opacity = 0.7 + Math.random() * 0.3;
+        
+        // 圆形或花瓣形状
+        if (Math.random() > 0.5) {
+          particle.style.borderRadius = '70% 30% 70% 30% / 30% 70% 30% 70%';
+        } else {
+          particle.style.borderRadius = '50%';
+        }
+        
+        // 添加到容器
+        particlesContainer.appendChild(particle);
+        particles.push({ element: particle, startX, startY });
+        
+        // 开始动画
+        animateParticle(particle, startX, startY);
+      }
+      
+      return particles;
+    }
+
+    // 粒子动画
+    function animateParticle(particle, startX, startY) {
+      const duration = 3000 + Math.random() * 2000;
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 50 + Math.random() * 100;
+      
+      let startTime = null;
+      
+      function animate(timestamp) {
+        if (!startTime) startTime = timestamp;
+        const progress = (timestamp - startTime) / duration;
+        
+        if (progress < 1 && isEffectMode) {
+          const t = progress * effectConfig.animationSpeed;
+          const x = startX + Math.cos(angle + t * 4) * radius * Math.sin(t * Math.PI);
+          const y = startY + Math.sin(angle + t * 3) * radius * Math.sin(t * Math.PI) + t * 20;
+          
+          particle.style.left = `${x}px`;
+          particle.style.top = `${y}px`;
+          particle.style.transform = `rotate(${t * 360}deg)`;
+          
+          requestAnimationFrame(animate);
+        } else if (isEffectMode) {
+          // 循环动画
+          animateParticle(particle, startX, startY);
+        }
+      }
+      
+      requestAnimationFrame(animate);
+    }
+
+    // 粒子转换回照片
+    function transformParticlesToPhotos() {
+      particlePhotoMap.forEach((data, cardIndex) => {
+        // 显示原照片
+        data.card.style.opacity = '1';
+        data.card.style.transform = 'scale(1)';
+        
+        // 移除粒子
+        data.particles.forEach(p => {
+          p.element.style.transition = 'all 0.5s ease';
+          p.element.style.opacity = '0';
+          p.element.style.transform = 'scale(0)';
+          
+          setTimeout(() => {
+            if (p.element.parentNode) {
+              p.element.parentNode.removeChild(p.element);
+            }
+          }, 500);
+        });
+      });
+      
+      particlePhotoMap.clear();
+      
+      // 恢复花瓣背景
+      setTimeout(() => {
+        createParticles();
+      }, 500);
     }
 
     // 初始化应用

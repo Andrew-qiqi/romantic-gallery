@@ -121,6 +121,11 @@
 <body class="bg-gradient-to-br from-pink-50 to-blue-50 min-h-screen">
   <!-- 粒子背景容器 -->
   <div id="particles-container" class="fixed inset-0 pointer-events-none z-0"></div>
+  
+  <!-- 背景音乐 -->
+  <audio id="bg-music" loop>
+    <source src="https://music.163.com/song/media/outer/url?id=1387586040.mp3" type="audio/mpeg">
+  </audio>
 
   <!-- 导航栏 -->
   <header class="sticky top-0 z-50 glass">
@@ -134,6 +139,10 @@
           <i class="fa fa-cloud-upload"></i>
           <span>上传照片</span>
         </button>
+        <button id="music-toggle" class="bg-white/80 hover:bg-white text-dark p-2 rounded-full transition-all duration-300 shadow-md hover:shadow-lg">
+          <i class="fa fa-music"></i>
+        </button>
+        <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="0.5" class="w-0 overflow-hidden transition-all duration-300 hover:w-20 focus:w-20 bg-white/80 rounded-full h-2 cursor-pointer">
         <input type="file" id="file-input" accept="image/*" multiple class="hidden">
         <button id="theme-toggle" class="bg-white/80 hover:bg-white text-dark p-2 rounded-full transition-all duration-300 shadow-md hover:shadow-lg">
           <i class="fa fa-moon-o"></i>
@@ -199,6 +208,27 @@
       </div>
     </div>
   </footer>
+
+  <!-- 删除确认对话框 -->
+  <div id="delete-modal" class="modal fixed inset-0 bg-black/80 z-50 flex items-center justify-center opacity-0 invisible">
+    <div class="modal-content bg-white rounded-lg overflow-hidden max-w-sm w-full transform scale-95">
+      <div class="p-6 text-center">
+        <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <i class="fa fa-exclamation-triangle text-red-500 text-2xl"></i>
+        </div>
+        <h3 class="text-xl font-bold text-gray-800 mb-2">确认删除</h3>
+        <p class="text-gray-600 mb-6">确定要删除这张照片吗？此操作无法撤销。</p>
+        <div class="flex justify-center gap-4">
+          <button id="cancel-delete" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2 rounded-lg transition-all duration-300">
+            取消
+          </button>
+          <button id="confirm-delete" class="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-lg transition-all duration-300">
+            删除
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- 照片查看模态框 -->
   <div id="photo-modal" class="modal fixed inset-0 bg-black/80 z-50 flex items-center justify-center opacity-0 invisible">
@@ -332,10 +362,18 @@
     let currentPhotoIndex = 0;
     let currentCategory = 'all';
     let isDarkMode = false;
+    let photoToDelete = null;
+    let isMusicPlaying = false;
+    let bgMusic = null;
 
     // DOM 元素
     const photoGrid = document.getElementById('photo-grid');
     const photoModal = document.getElementById('photo-modal');
+    const deleteModal = document.getElementById('delete-modal');
+    const confirmDelete = document.getElementById('confirm-delete');
+    const cancelDelete = document.getElementById('cancel-delete');
+    const musicToggle = document.getElementById('music-toggle');
+    const volumeSlider = document.getElementById('volume-slider');
     const modalImage = document.getElementById('modal-image');
     const modalTitle = document.getElementById('modal-title');
     const modalDescription = document.getElementById('modal-description');
@@ -364,8 +402,12 @@
       // 渲染照片
       renderPhotos();
       
-      // 创建粒子背景
+      // 创建花瓣背景
       createParticles();
+      
+      // 初始化背景音乐
+      bgMusic = document.getElementById('bg-music');
+      bgMusic.volume = 0.5;
       
       // 事件监听
       setupEventListeners();
@@ -408,24 +450,68 @@
       
       filteredPhotos.forEach((photo, index) => {
         const photoCard = document.createElement('div');
-        photoCard.className = 'photo-card rounded-lg overflow-hidden shadow-md animate-fade-in';
+        photoCard.className = 'photo-card group rounded-lg overflow-hidden shadow-md animate-fade-in';
         photoCard.style.animationDelay = `${index * 0.1}s`;
         
         photoCard.innerHTML = `
           <div class="relative aspect-[4/3] overflow-hidden bg-gray-100">
             <img src="${photo.url}" alt="${photo.title}" class="w-full h-full object-cover transition-transform duration-500 hover:scale-110">
-            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 flex items-end">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-300 flex items-end justify-between">
               <div class="p-4 text-white">
                 <h3 class="font-bold text-lg">${photo.title}</h3>
                 <p class="text-sm opacity-90">${photo.date}</p>
               </div>
+              <button class="delete-btn absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 shadow-lg" data-id="${photo.id}">
+                <i class="fa fa-trash-o"></i>
+              </button>
             </div>
           </div>
         `;
         
-        photoCard.addEventListener('click', () => openModal(photo, index));
+        photoCard.addEventListener('click', (e) => {
+          if (e.target.closest('.delete-btn')) {
+            return;
+          }
+          openModal(photo, index);
+        });
+        
+        const deleteBtn = photoCard.querySelector('.delete-btn');
+        deleteBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openDeleteModal(photo.id);
+        });
+        
         photoGrid.appendChild(photoCard);
       });
+    }
+
+    // 打开删除确认对话框
+    function openDeleteModal(photoId) {
+      photoToDelete = photoId;
+      deleteModal.classList.remove('opacity-0', 'invisible');
+      deleteModal.querySelector('.modal-content').classList.remove('scale-95');
+      deleteModal.querySelector('.modal-content').classList.add('scale-100');
+      document.body.style.overflow = 'hidden';
+    }
+
+    // 关闭删除确认对话框
+    function closeDeleteModal() {
+      deleteModal.classList.add('opacity-0', 'invisible');
+      deleteModal.querySelector('.modal-content').classList.remove('scale-100');
+      deleteModal.querySelector('.modal-content').classList.add('scale-95');
+      document.body.style.overflow = '';
+      photoToDelete = null;
+    }
+
+    // 执行删除照片
+    function deletePhoto() {
+      if (photoToDelete === null) return;
+      
+      photos = photos.filter(photo => photo.id !== photoToDelete);
+      savePhotos();
+      renderPhotos();
+      closeDeleteModal();
+      showNotification('照片已删除');
     }
 
     // 打开照片查看模态框
@@ -570,6 +656,25 @@
         themeToggle.innerHTML = '<i class="fa fa-moon-o"></i>';
       }
     }
+    
+    // 切换背景音乐播放
+    function toggleMusic() {
+      if (!bgMusic) return;
+      
+      if (isMusicPlaying) {
+        bgMusic.pause();
+        musicToggle.innerHTML = '<i class="fa fa-music"></i>';
+        musicToggle.classList.remove('playing');
+      } else {
+        bgMusic.play().catch(error => {
+          console.log('播放音乐需要用户交互:', error);
+          showNotification('点击播放按钮播放音乐');
+        });
+        musicToggle.innerHTML = '<i class="fa fa-pause"></i>';
+        musicToggle.classList.add('playing');
+      }
+      isMusicPlaying = !isMusicPlaying;
+    }
 
     // 显示通知
     function showNotification(message) {
@@ -595,37 +700,99 @@
       }, 3000);
     }
 
-    // 创建粒子背景
+    // 创建花瓣碎片漂浮背景
     function createParticles() {
       particlesContainer.innerHTML = '';
       
-      const particleCount = 50;
+      const petalCount = 60;
       
-      for (let i = 0; i < particleCount; i++) {
-        const particle = document.createElement('div');
-        particle.className = 'particle';
+      for (let i = 0; i < petalCount; i++) {
+        const petal = document.createElement('div');
+        petal.className = 'petal';
         
-        // 随机大小
-        const size = Math.random() * 5 + 1;
-        particle.style.width = `${size}px`;
-        particle.style.height = `${size}px`;
+        // 随机大小 (8px - 25px)
+        const size = Math.random() * 17 + 8;
+        petal.style.width = `${size}px`;
+        petal.style.height = `${size}px`;
         
         // 随机位置
-        particle.style.left = `${Math.random() * 100}%`;
-        particle.style.top = `${Math.random() * 100}%`;
+        petal.style.left = `${Math.random() * 100}%`;
+        petal.style.top = `${Math.random() * 100}%`;
         
-        // 随机颜色
-        const colors = ['#ff6b8b', '#a2d2ff', '#ffafcc', '#bde0fe'];
-        particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        // 随机透明度 (0.3 - 0.8)
+        petal.style.opacity = Math.random() * 0.5 + 0.3;
         
-        // 随机动画
-        const duration = Math.random() * 20 + 10;
-        const delay = Math.random() * 5;
+        // 随机颜色 - 粉色系花瓣
+        const colors = [
+          '#ffb7c5', // 樱花粉
+          '#ffc0cb', // 粉红
+          '#ff69b4', // 热粉红
+          '#ff85a2', // 浅粉色
+          '#ffd1dc', // 淡粉红
+          '#fff0f5', // 薰衣草红
+          '#ffe4e1', // 迷雾玫瑰
+        ];
+        const color = colors[Math.floor(Math.random() * colors.length)];
         
-        particle.style.animation = `float ${duration}s ease-in-out ${delay}s infinite`;
+        // 创建花瓣形状
+        petal.style.background = `linear-gradient(135deg, ${color} 0%, ${color}dd 100%)`;
+        petal.style.borderRadius = '70% 30% 70% 30% / 30% 70% 30% 70%';
         
-        particlesContainer.appendChild(particle);
+        // 随机动画 - 飘落效果
+        const duration = Math.random() * 15 + 10; // 10-25秒
+        const delay = Math.random() * -25; // 负延迟，让花瓣从不同位置开始
+        const rotate = Math.random() * 360;
+        
+        // 添加自定义飘落动画
+        petal.style.animation = `petalFall ${duration}s linear ${delay}s infinite, petalRotate ${duration * 0.8}s ease-in-out ${delay}s infinite`;
+        
+        // 随机水平移动
+        const translateX = (Math.random() - 0.5) * 100;
+        petal.style.setProperty('--translate-x', `${translateX}px`);
+        
+        particlesContainer.appendChild(petal);
       }
+      
+      // 添加花瓣飘落动画关键帧
+      addPetalAnimationStyles();
+    }
+    
+    // 添加花瓣动画样式
+    function addPetalAnimationStyles() {
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes petalFall {
+          0% {
+            transform: translateY(-5vh) translateX(0) rotate(0deg);
+            opacity: 0;
+          }
+          10% {
+            opacity: var(--petal-opacity, 0.6);
+          }
+          90% {
+            opacity: var(--petal-opacity, 0.6);
+          }
+          100% {
+            transform: translateY(105vh) translateX(var(--translate-x, 50px)) rotate(720deg);
+            opacity: 0;
+          }
+        }
+        @keyframes petalRotate {
+          0%, 100% {
+            border-radius: 70% 30% 70% 30% / 30% 70% 30% 70%;
+          }
+          25% {
+            border-radius: 30% 70% 30% 70% / 70% 30% 70% 30%;
+          }
+          50% {
+            border-radius: 70% 30% 70% 30% / 30% 70% 30% 70%;
+          }
+          75% {
+            border-radius: 30% 70% 30% 70% / 70% 30% 70% 30%;
+          }
+        }
+      `;
+      document.head.appendChild(style);
     }
 
     // 设置事件监听
@@ -664,6 +831,26 @@
       uploadModal.addEventListener('click', (e) => {
         if (e.target === uploadModal) {
           closeUploadModalFunc();
+        }
+      });
+      
+      // 删除照片模态框
+      cancelDelete.addEventListener('click', closeDeleteModal);
+      confirmDelete.addEventListener('click', deletePhoto);
+      
+      // 点击删除模态框背景关闭
+      deleteModal.addEventListener('click', (e) => {
+        if (e.target === deleteModal) {
+          closeDeleteModal();
+        }
+      });
+      
+      // 删除模态框键盘事件
+      document.addEventListener('keydown', (e) => {
+        if (!deleteModal.classList.contains('opacity-0')) {
+          if (e.key === 'Escape') {
+            closeDeleteModal();
+          }
         }
       });
       
@@ -736,6 +923,14 @@
       
       // 主题切换
       themeToggle.addEventListener('click', toggleTheme);
+      
+      // 音乐控制
+      musicToggle.addEventListener('click', toggleMusic);
+      volumeSlider.addEventListener('input', (e) => {
+        if (bgMusic) {
+          bgMusic.volume = e.target.value;
+        }
+      });
       
       // 窗口大小改变时重新创建粒子
       window.addEventListener('resize', () => {

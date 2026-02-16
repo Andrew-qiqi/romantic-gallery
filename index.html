@@ -163,7 +163,7 @@
   
   <!-- 背景音乐 - 使用可靠的免费音乐源 -->
   <audio id="bg-music" loop preload="auto" crossorigin="anonymous">
-    <source src="https://cdn.pixabay.com/download/audio/2022/03/24/audio_c8c8a73467.mp3?filename=relaxing-mountains-rivers-streams-running-water-18178.mp3" type="audio/mpeg">
+    <source src="https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=soft-piano-100-bpm-121529.mp3" type="audio/mpeg">
   </audio>
   
   <!-- 音频加载状态提示 -->
@@ -1019,10 +1019,9 @@
         gestureToggle.classList.add('playing');
         gestureToggle.innerHTML = '<i class="fa fa-hand-peace-o"></i>';
         showNotification('手势控制已开启，请对着摄像头');
-        } catch (error) {
-          console.error('手势识别初始化失败:', error);
-          showNotification('无法开启手势控制，请检查摄像头权限');
-        }
+      } catch (error) {
+        console.error('手势识别初始化失败:', error);
+        showNotification('无法开启手势控制，请检查摄像头权限');
       }
     }
     
